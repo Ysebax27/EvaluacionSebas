@@ -23,33 +23,35 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Crear carpeta en el servidor
+      - name: Preparar servidor
         run: |
-          ssh -i ~/.ssh/id_rsa \
-          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
-          "mkdir -p ~/app"
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          mkdir -p /home/ubuntu/app
+          EOF
 
-      - name: Copiar archivos al servidor
+      - name: Copiar archivos
         run: |
-          scp -i ~/.ssh/id_rsa -r . \
-          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/app
+          rsync -avz -e "ssh -i ~/.ssh/id_rsa" \
+          --exclude=".git" \
+          --exclude=".github" \
+          ./ \
+          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/app/
 
-      - name: Desplegar Docker
+      - name: Desplegar aplicación
         run: |
-          ssh -i ~/.ssh/id_rsa \
-          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
 
-          cd ~/app
+          cd /home/ubuntu/app
 
-          docker stop pagina || true
-          docker rm pagina || true
+          sudo docker stop pagina || true
+          sudo docker rm pagina || true
 
-          docker build -t pagina .
+          sudo docker build -t pagina .
 
-          docker run -d \
+          sudo docker run -d \
             --name pagina \
-            -p 80:80 \
             --restart unless-stopped \
+            -p 80:80 \
             pagina
 
           EOF
