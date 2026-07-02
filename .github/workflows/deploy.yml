@@ -1,0 +1,51 @@
+name: Deploy Docker App
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+
+  deploy:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: Construir imagen Docker
+        run: docker build -t pagina .
+
+      - name: Configurar llave SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+      - name: Copiar archivos al servidor
+        run: |
+          scp -o StrictHostKeyChecking=no -r . \
+          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/app
+
+      - name: Desplegar Docker
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+
+          cd app
+
+          docker stop pagina || true
+
+          docker rm pagina || true
+
+          docker build -t pagina .
+
+          docker run -d \
+          --name pagina \
+          -p 80:80 \
+          pagina
+
+          EOF
