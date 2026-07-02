@@ -6,13 +6,10 @@ on:
       - main
 
 jobs:
-
   deploy:
-
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Clonar repositorio
         uses: actions/checkout@v4
 
@@ -24,28 +21,35 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Crear carpeta en el servidor
+        run: |
+          ssh -i ~/.ssh/id_rsa \
+          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+          "mkdir -p ~/app"
 
       - name: Copiar archivos al servidor
         run: |
-          scp -o StrictHostKeyChecking=no -r . \
-          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/app
+          scp -i ~/.ssh/id_rsa -r . \
+          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/app
 
       - name: Desplegar Docker
         run: |
-          ssh -o StrictHostKeyChecking=no \
-          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+          ssh -i ~/.ssh/id_rsa \
+          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
 
-          cd app
+          cd ~/app
 
           docker stop pagina || true
-
           docker rm pagina || true
 
           docker build -t pagina .
 
           docker run -d \
-          --name pagina \
-          -p 80:80 \
-          pagina
+            --name pagina \
+            -p 80:80 \
+            --restart unless-stopped \
+            pagina
 
           EOF
